@@ -8,8 +8,10 @@ static u8g2_esp32_hal_t    u8g2_esp32_hal;
 
 void u8g2_esp32_hal_init(u8g2_esp32_hal_t u8g2_esp32_hal_param) {
     u8g2_esp32_hal = u8g2_esp32_hal_param;
+    handle_i2c = i2c_cmd_link_create();
 }
-
+uint8_t buffer[128];
+uint8_t buf_idx = 0;
 uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void *arg_ptr) {
     switch(msg) {
         case U8X8_MSG_BYTE_INIT: {
@@ -26,28 +28,30 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
             break;
         }
 
+        case U8X8_MSG_BYTE_START_TRANSFER: {
+            buf_idx = 0;
+            break;
+        }
+
         case U8X8_MSG_BYTE_SEND: {
-            uint8_t* data_ptr = (uint8_t*)arg_ptr;
-            while( arg_int > 0 ) {
-                ESP_ERROR_CHECK(i2c_master_write_byte(handle_i2c, *data_ptr, ACK_CHECK_EN));
-                data_ptr++;
+            auto data = (uint8_t *)arg_ptr;
+            while (arg_int > 0) {
+                buffer[buf_idx++] = *data;
+                data++;
                 arg_int--;
             }
             break;
         }
 
-        case U8X8_MSG_BYTE_START_TRANSFER: {
+        case U8X8_MSG_BYTE_END_TRANSFER: {
             uint8_t i2c_address = u8x8_GetI2CAddress(u8x8);
-            handle_i2c = i2c_cmd_link_create();
             ESP_ERROR_CHECK(i2c_master_start(handle_i2c));
             ESP_ERROR_CHECK(i2c_master_write_byte(handle_i2c, i2c_address<<1 | I2C_MASTER_WRITE, ACK_CHECK_EN));
-            break;
-        }
-
-        case U8X8_MSG_BYTE_END_TRANSFER: {
+            printf("ff: %d\n", buf_idx);
+            ESP_ERROR_CHECK(i2c_master_write(handle_i2c, (uint8_t*)buffer, buf_idx, ACK_CHECK_EN));
             ESP_ERROR_CHECK(i2c_master_stop(handle_i2c));
             ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, handle_i2c, I2C_TIMEOUT_MS / portTICK_RATE_MS));
-            i2c_cmd_link_delete(handle_i2c);
+            buf_idx = 0;
             break;
         }
     }
@@ -91,6 +95,11 @@ uint8_t u8g2_esp32_gpio_and_delay_cb(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int,
         case U8X8_MSG_DELAY_MILLI:
             vTaskDelay(arg_int/portTICK_PERIOD_MS);
             break;
+
+        case U8X8_MSG_DELAY_I2C: {
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
+//            vTaskDelay(arg_int/portTICK_PERIOD_MS);
+        }
     }
     return 0;
 }
