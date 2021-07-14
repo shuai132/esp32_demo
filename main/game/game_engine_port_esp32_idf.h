@@ -3,6 +3,8 @@
 #include "oled/OLED.h"
 
 struct Screen : public ge::Canvas {
+    Screen();
+
     void onClear() override {
         oled.clearDisplay();
     }

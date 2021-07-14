@@ -1,5 +1,8 @@
 #include "game_engine_port_esp32_idf.h"
 #include <thread>
+#include <driver/gpio.h>
+
+#define GPIO_BUTTON GPIO_NUM_0
 
 namespace ge {
 
@@ -16,7 +19,19 @@ void delayUs(unsigned int us) {
 }
 
 bool checkButton() {
-    return true;
+    return !gpio_get_level(GPIO_BUTTON);
 }
 
+}
+
+static void initButton() {
+    gpio_config_t io_conf = {
+            .pin_bit_mask = 1ULL << GPIO_BUTTON,
+            .mode = GPIO_MODE_INPUT,
+    };
+    gpio_config(&io_conf);
+}
+
+Screen::Screen() {
+    initButton();
 }
