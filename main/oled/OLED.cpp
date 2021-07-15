@@ -3,20 +3,16 @@
  * modify from Adafruit_SSD1306.cpp
  */
 #include "OLED.h"
-#include <esp_log.h>
-#include "sdkconfig.h"
-#include <cstring>
-#include "unity.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
-#include "esp_lcd_panel_vendor.h"
+#include "unity.h"
 
 #define OLED_WIDTH              (128)
 #define OLED_HEIGHT             (64)
 #define OLED_I2C_SDA_GPIO       (4)
 #define OLED_I2C_SCL_GPIO       (15)
 #define OLED_PIN_RESET          GPIO_NUM_16
-#define I2C_MASTER_NUM I2C_NUM_0   /*!< I2C port number for master dev */
+#define I2C_MASTER_NUM          I2C_NUM_0   /*!< I2C port number for master dev */
 #define I2C_MASTER_TX_BUF_DISABLE   0   /*!< I2C master do not need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE   0   /*!< I2C master do not need buffer */
 #define I2C_MASTER_FREQ_HZ      800000  /*!< I2C master clock frequency */
