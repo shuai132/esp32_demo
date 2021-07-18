@@ -4,6 +4,7 @@
  */
 #pragma once
 
+#include <i2c.h>
 #include "Adafruit_GFX.h"
 
 /// The following "raw" color names are kept for backwards client compatability
@@ -59,8 +60,8 @@
 class Adafruit_SSD1306 : public Adafruit_GFX {
 public:
   Adafruit_SSD1306(uint8_t w, uint8_t h,
-                   uint8_t i2c, uint8_t addr, uint32_t freq,
-                   uint8_t sda, uint8_t scl, uint8_t rst = -1);
+                   i2c_port_t i2c, uint8_t addr, uint32_t freq,
+                   gpio_num_t sda, gpio_num_t scl, gpio_num_t rst = GPIO_NUM_MAX);
 
   ~Adafruit_SSD1306();
 
@@ -88,8 +89,9 @@ private:
   void ssd1306_writeData(const uint8_t* data, size_t len);
   void ssd1306_reset();
 
-  uint8_t i2c, addr; uint32_t freq;
-  uint8_t sda, scl, rst;
+  i2c_port_t i2c;
+  uint8_t addr; uint32_t freq;
+  gpio_num_t sda, scl, rst;
   uint8_t *buffer;
   const uint8_t vccstate = SSD1306_SWITCHCAPVCC;
   uint8_t contrast; // normal contrast setting for this device

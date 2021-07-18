@@ -2,6 +2,8 @@
  * SSD1306 driver for ESP32
  * modify from Adafruit_SSD1306.cpp
  */
+#include <FreeRTOS.h>
+#include <task.h>
 #include "Adafruit_SSD1306.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
@@ -22,8 +24,8 @@
 #define I2C_ACK_CHECK_EN            1   /*!< I2C master will check ack from slave*/
 
 Adafruit_SSD1306::Adafruit_SSD1306(uint8_t w, uint8_t h,
-                                   uint8_t i2c, uint8_t addr, uint32_t freq,
-                                   uint8_t sda, uint8_t scl, uint8_t rst)
+                                   i2c_port_t i2c, uint8_t addr, uint32_t freq,
+                                   gpio_num_t sda, gpio_num_t scl, gpio_num_t rst)
         : Adafruit_GFX(w, h)
         , i2c(i2c), addr(addr), freq(freq)
         , sda(sda), scl(scl), rst(rst)
@@ -38,7 +40,7 @@ Adafruit_SSD1306::~Adafruit_SSD1306() {
 
 void Adafruit_SSD1306::ssd1306_reset() {
     gpio_config_t io_conf = {
-            .pin_bit_mask = 1ULL << rst,
+            .pin_bit_mask = static_cast<uint32_t>(1ULL << (uint8_t)rst),
             .mode = GPIO_MODE_OUTPUT,
     };
     ESP_ERROR_CHECK(gpio_config(&io_conf));
@@ -65,7 +67,7 @@ void Adafruit_SSD1306::ssd1306_writeData(const uint8_t * data, size_t len) {
     i2c_master_start(cmd);
     ESP_ERROR_CHECK(i2c_master_write_byte(cmd, ( addr << 1 ) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN));
     ESP_ERROR_CHECK(i2c_master_write_byte(cmd, 0x40, I2C_ACK_CHECK_EN));
-    ESP_ERROR_CHECK(i2c_master_write(cmd, data, len, I2C_ACK_CHECK_EN));
+    ESP_ERROR_CHECK(i2c_master_write(cmd, (uint8_t*)data, len, I2C_ACK_CHECK_EN));
     ESP_ERROR_CHECK(i2c_master_stop(cmd));
     ESP_ERROR_CHECK(i2c_master_cmd_begin(i2c, cmd, portMAX_DELAY));
     i2c_cmd_link_delete(cmd);
@@ -76,7 +78,7 @@ void Adafruit_SSD1306::ssd1306_commandList(const uint8_t *c, uint8_t n) {
     i2c_master_start(cmd);
     ESP_ERROR_CHECK(i2c_master_write_byte(cmd, ( addr << 1 ) | I2C_MASTER_WRITE, I2C_ACK_CHECK_EN));
     ESP_ERROR_CHECK(i2c_master_write_byte(cmd, 0, I2C_ACK_CHECK_EN));
-    ESP_ERROR_CHECK(i2c_master_write(cmd, c, n, I2C_ACK_CHECK_EN));
+    ESP_ERROR_CHECK(i2c_master_write(cmd, (uint8_t*)c, n, I2C_ACK_CHECK_EN));
     ESP_ERROR_CHECK(i2c_master_stop(cmd));
     ESP_ERROR_CHECK(i2c_master_cmd_begin(i2c, cmd, portMAX_DELAY));
     i2c_cmd_link_delete(cmd);
@@ -87,21 +89,18 @@ bool Adafruit_SSD1306::begin() {
     return false;
 
   clearDisplay();
-
-  ssd1306_reset();
   i2c_config_t conf_master = {
           .mode = I2C_MODE_MASTER,
           .sda_io_num = sda,
-          .scl_io_num = scl,
           .sda_pullup_en = GPIO_PULLUP_ENABLE,
+          .scl_io_num = scl,
           .scl_pullup_en = GPIO_PULLUP_ENABLE,
-          .clk_flags = 0,
   };
-  conf_master.master.clk_speed = freq;
+
+  ssd1306_reset();
+  conf_master.clk_stretch_tick = 200;
+  ESP_ERROR_CHECK(i2c_driver_install(i2c, conf_master.mode));
   ESP_ERROR_CHECK(i2c_param_config(i2c, &conf_master));
-  ESP_ERROR_CHECK(i2c_driver_install(i2c, I2C_MODE_MASTER,
-                                 I2C_MASTER_RX_BUF_DISABLE,
-                                 I2C_MASTER_TX_BUF_DISABLE, 0));
 
   TRANSACTION_START
 
