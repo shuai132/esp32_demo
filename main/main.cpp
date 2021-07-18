@@ -5,8 +5,8 @@ extern "C"
 void app_main() {
     oled.begin();
     ScreenConfig c{};
-    c.SCREEN_WIDTH = 128;
-    c.SCREEN_HEIGHT = 64;
+    c.SCREEN_WIDTH = OLED_WIDTH;
+    c.SCREEN_HEIGHT = OLED_HEIGHT;
     c.PER_CHAR_WIDTH = 6;
     c.fps = 120;
     c.canvas = new Screen;

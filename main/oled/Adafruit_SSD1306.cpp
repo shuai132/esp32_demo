@@ -22,8 +22,8 @@
 #define I2C_ACK_CHECK_EN            1   /*!< I2C master will check ack from slave*/
 
 Adafruit_SSD1306::Adafruit_SSD1306(uint8_t w, uint8_t h,
-                                   uint8_t i2c, uint8_t addr, uint32_t freq,
-                                   uint8_t sda, uint8_t scl, uint8_t rst)
+                                   i2c_port_t i2c, uint8_t addr, uint32_t freq,
+                                   gpio_num_t sda, gpio_num_t scl, gpio_num_t rst)
         : Adafruit_GFX(w, h)
         , i2c(i2c), addr(addr), freq(freq)
         , sda(sda), scl(scl), rst(rst)
@@ -37,16 +37,17 @@ Adafruit_SSD1306::~Adafruit_SSD1306() {
 }
 
 void Adafruit_SSD1306::ssd1306_reset() {
+    if (rst == GPIO_NUM_MAX) return;
     gpio_config_t io_conf = {
-            .pin_bit_mask = 1ULL << rst,
+            .pin_bit_mask = static_cast<uint32_t>(1ULL << (uint8_t)rst),
             .mode = GPIO_MODE_OUTPUT,
     };
     ESP_ERROR_CHECK(gpio_config(&io_conf));
-    gpio_set_level((gpio_num_t)rst, 1);
+    gpio_set_level(rst, 1);
     vTaskDelay(pdMS_TO_TICKS(1));
-    gpio_set_level((gpio_num_t)rst, 0);
+    gpio_set_level(rst, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level((gpio_num_t)rst, 1);
+    gpio_set_level(rst, 1);
 }
 
 void Adafruit_SSD1306::ssd1306_command1(uint8_t c) {
@@ -98,10 +99,10 @@ bool Adafruit_SSD1306::begin() {
           .clk_flags = 0,
   };
   conf_master.master.clk_speed = freq;
-  ESP_ERROR_CHECK(i2c_param_config(i2c, &conf_master));
   ESP_ERROR_CHECK(i2c_driver_install(i2c, I2C_MODE_MASTER,
                                  I2C_MASTER_RX_BUF_DISABLE,
                                  I2C_MASTER_TX_BUF_DISABLE, 0));
+  ESP_ERROR_CHECK(i2c_param_config(i2c, &conf_master));
 
   TRANSACTION_START
 
