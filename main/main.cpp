@@ -1,9 +1,33 @@
-#include <thread>
+#include <esp_netif.h>
 #include <driver/gpio.h>
+#include "asio.hpp"
+#include "TcpServer.hpp"
 
 #define LED_R GPIO_NUM_3
 #define LED_G GPIO_NUM_4
 #define LED_B GPIO_NUM_5
+
+extern "C" void wifi_init_sta(void);
+
+static void loop() {
+    wifi_init_sta();
+
+    asio::io_context io_context;
+    TcpServer tcp_server(io_context, 3333);
+    io_context.post([]{
+        printf("hello\n");
+    });
+    std::thread send([&]{
+        uint32_t count = 0;
+        for(;;) {
+            sleep(1);
+            char msg[8]{};
+            sprintf(msg, "%u\n", count++);
+            tcp_server.writeAll(reinterpret_cast<const uint8_t*>(msg), strlen(msg));
+        }
+    });
+    io_context.run();
+}
 
 extern "C"
 void app_main() {
@@ -25,5 +49,6 @@ void app_main() {
             std::this_thread::sleep_for(std::chrono::milliseconds (100));
         }
     });
+    loop();
     dd.join();
 }

@@ -1,6 +1,7 @@
 idf_component_register(SRCS "main.cpp"
         game/game_engine_port_esp32_idf.cpp
         oled/OLED.cpp
+        station_example_main.c
         oled/Adafruit_GFX.cpp
         oled/Adafruit_SSD1306.cpp
         oled/glcdfont.c
