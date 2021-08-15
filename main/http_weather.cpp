@@ -11,18 +11,18 @@ const static char *HTTP_TAG = "WEATHER";
 
 std::string http_get_weather() {
     esp_http_client_config_t config_with_url = {
-            .url = "http://api.seniverse.com/v3/weather/now.json?key=S9r6pqlLjzI_cKVZM&location=shanghai&language=en&unit=c"
+            .url = "http://api.seniverse.com/v3/weather/now.json?key=S9r6pqlLjzI_cKVZM&location=31.315207:121.513113&language=en&unit=c"
     };
     esp_http_client_handle_t client = esp_http_client_init(&config_with_url);
     TEST_ASSERT(client != nullptr);
-    defer [&]{
+    defer {
         esp_http_client_cleanup(client);
     };
 
     // GET Request
     esp_http_client_set_method(client, HTTP_METHOD_GET);
     esp_err_t err = esp_http_client_open(client, 0);
-    defer [&]{
+    defer {
         esp_http_client_close(client);
     };
     if (err != ESP_OK) {

@@ -23,6 +23,10 @@ void app_main() {
 
         for(;;) {
             std::string http_result = http_get_weather();
+            if (http_result.empty()) {
+                sleep(1);
+                continue;
+            }
             ESP_LOGI(TAG, "response:%s", http_result.c_str());
 
             using namespace ArduinoJson;
