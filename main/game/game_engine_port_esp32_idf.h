@@ -1,8 +1,11 @@
 #include <cmath>
+#include <functional>
 #include "game_engine_port.h"
 #include "oled/OLED.h"
 
 struct Screen : public ge::Canvas {
+    std::function<void()> onBeforeDraw;
+
     Screen();
 
     void onClear() override {
@@ -10,6 +13,7 @@ struct Screen : public ge::Canvas {
     }
 
     void onDraw() override {
+        if (onBeforeDraw) onBeforeDraw();
         oled.display();
     }
 

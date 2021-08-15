@@ -1,10 +1,12 @@
 idf_component_register(SRCS "main.cpp"
         game/game_engine_port_esp32_idf.cpp
         oled/OLED.cpp
+        wifi_station.c
         oled/Adafruit_GFX.cpp
         oled/Adafruit_SSD1306.cpp
         oled/glcdfont.c
         modules/chrome_game/game/chrome_game.cpp
+        http_weather.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules)
