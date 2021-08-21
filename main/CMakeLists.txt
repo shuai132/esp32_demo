@@ -7,6 +7,7 @@ idf_component_register(SRCS "main.cpp"
         oled/glcdfont.c
         modules/chrome_game/game/chrome_game.cpp
         http_weather.cpp
+        websocket.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules)
