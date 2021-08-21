@@ -1,3 +1,6 @@
 [submodule "main/modules/chrome_game"]
 	path = main/modules/chrome_game
 	url = git@github.com:shuai132/chrome_game.git
+[submodule "main/modules/RpcCore"]
+	path = main/modules/RpcCore
+	url = git@github.com:shuai132/RpcCore.git

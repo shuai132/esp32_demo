@@ -20,19 +20,23 @@ static void websocket_event_handler(void* handler_args, esp_event_base_t base, i
             break;
         case WEBSOCKET_EVENT_DATA:
             ESP_LOGI(TAG, "WEBSOCKET_EVENT_DATA");
-            ESP_LOGI(TAG, "Received opcode=%d", data->op_code);
+            ESP_LOGI(TAG, "Received opcode=%d, len=%d", data->op_code, data->data_len);
             if (data->op_code == 0x08 && data->data_len == 2) {
                 ESP_LOGW(TAG, "Received closed message with code=%d", 256 * data->data_ptr[0] + data->data_ptr[1]);
                 if (client->onConnectState) {
                     client->onConnectState(WebsocketClient::ConnectState::Closed);
                 }
             } else {
-                ESP_LOGW(TAG, "Received=%.*s", data->data_len, (char*) data->data_ptr);
-                if (client->onReceivedData) {
-                    client->onReceivedData((uint8_t*) data->data_ptr, data->data_len);
+                if (data->payload_offset == 0) {
+                    client->package.resize(0);
+                    client->package.reserve(data->payload_len);
+                }
+                client->package.append(data->data_ptr, data->data_len);
+                if (client->onReceivedData && data->data_len > 0 && client->package.length() == data->payload_len) {
+                    client->onReceivedData(client->package);
                 }
             }
-            ESP_LOGW(TAG, "Total payload length=%d, data_len=%d, current payload offset=%d\r\n", data->payload_len,
+            ESP_LOGW(TAG, "Total payload length=%d, data_len=%d, current payload offset=%d", data->payload_len,
                      data->data_len, data->payload_offset);
             break;
         case WEBSOCKET_EVENT_ERROR:
@@ -55,6 +59,7 @@ WebsocketClient::~WebsocketClient() {
 void WebsocketClient::start(const std::string& uri) {
     esp_websocket_client_config_t websocket_cfg = {};
     websocket_cfg.uri = uri.c_str();
+    websocket_cfg.buffer_size = 1024 * 2;
     ESP_LOGI(TAG, "Connecting to %s...", websocket_cfg.uri);
     client = esp_websocket_client_init(&websocket_cfg);
     esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, websocket_event_handler, this);
