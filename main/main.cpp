@@ -7,27 +7,39 @@
 #include "http_weather.h"
 #include "websocket.h"
 #include "RpcCore.hpp"
+#include "ArduinoJson.hpp"
 
 const static char *TAG = "MAIN";
-static WebsocketClient client;
-static std::shared_ptr<RpcCore::Rpc> rpc;
 
 static void start_rpc_task() {
     using namespace RpcCore;
+
+    static WebsocketClient client;
+    static std::shared_ptr<RpcCore::Rpc> rpc;
 
     auto connection = std::make_shared<Connection>([&](std::string package) {
         client.send(package.data(), package.length());
     });
     client.onReceivedData = [connection](std::string package) {
-        connection->onRecvPacket(package);
+        connection->onRecvPackage(std::move(package));
     };
-    client.start("ws://192.168.0.110:3000");
+    client.start("ws://192.168.0.103:3000");
 
     // 创建Rpc 收发消息
     rpc = Rpc::create(connection);
     rpc->setTimer([](uint32_t ms, const Rpc::TimeoutCb &cb) {
         // todo
     });
+    oled.begin();
+    rpc->subscribe<RpcCore::Bianry>("img", [](const RpcCore::Bianry& img) {
+        static Screen screen;
+        screen.onClear();
+        screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
+        screen.onDraw();
+    });
+    for(;;){
+        sleep(60);
+    }
 }
 
 extern "C"
@@ -41,14 +53,9 @@ void app_main() {
         the_ip = std::string(ip);
     });
 
-    start_rpc_task();
-    oled.begin();
-    rpc->subscribe<RpcCore::Bianry>("img", [](const RpcCore::Bianry& img) {
-        static Screen screen;
-        screen.onClear();
-        screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
-        screen.onDraw();
-    });
+    xTaskCreate([](void*){
+        start_rpc_task();
+        }, "rpc_task", 1024*40, nullptr, 5, nullptr);
 
     return;
 
