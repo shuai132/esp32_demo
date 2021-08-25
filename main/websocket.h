@@ -2,9 +2,9 @@
 
 #include <string>
 #include <functional>
-#include <esp_websocket_client.h>
 #include "noncopyable.hpp"
 
+class esp_websocket_client;
 class WebsocketClient : noncopyable {
 public:
     enum class ConnectState {
@@ -29,5 +29,5 @@ public:
 
     std::string package;
 private:
-    esp_websocket_client_handle_t client;
+    esp_websocket_client* client;
 };

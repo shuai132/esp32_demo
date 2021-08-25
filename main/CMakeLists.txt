@@ -8,8 +8,7 @@ idf_component_register(SRCS "main.cpp"
         modules/chrome_game/game/chrome_game.cpp
         http_weather.cpp
         websocket.cpp
-        modules/RpcCore/test/RpcTest.cpp
-        modules/RpcCore/test/TypeTest.cpp
+        utils.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules base)

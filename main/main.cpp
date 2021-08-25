@@ -1,6 +1,9 @@
 #include <thread>
 #include <sstream>
+#include <utility>
 #include <esp_log.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "chrome_game.h"
 #include "game/game_engine_port_esp32_idf.h"
 #include "wifi_station.h"
@@ -8,6 +11,8 @@
 #include "websocket.h"
 #include "RpcCore.hpp"
 #include "ArduinoJson.hpp"
+#include "asio.hpp"
+#include "utils.h"
 
 const static char *TAG = "MAIN";
 
@@ -16,6 +21,7 @@ static void start_rpc_task() {
 
     static WebsocketClient client;
     static std::shared_ptr<RpcCore::Rpc> rpc;
+    static asio::io_context context;
 
     auto connection = std::make_shared<Connection>([&](std::string package) {
         client.send(package.data(), package.length());
@@ -23,12 +29,11 @@ static void start_rpc_task() {
     client.onReceivedData = [connection](std::string package) {
         connection->onRecvPackage(std::move(package));
     };
-    client.start("ws://192.168.0.103:3000");
+    client.start("ws://192.168.0.109:3000");
 
-    // 创建Rpc 收发消息
     rpc = Rpc::create(connection);
-    rpc->setTimer([](uint32_t ms, const Rpc::TimeoutCb &cb) {
-        // todo
+    rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
+        utils::steady_timer(&context, std::move(cb), ms);
     });
     oled.begin();
     rpc->subscribe<RpcCore::Bianry>("img", [](const RpcCore::Bianry& img) {
@@ -37,9 +42,8 @@ static void start_rpc_task() {
         screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
         screen.onDraw();
     });
-    for(;;){
-        sleep(60);
-    }
+    asio::io_context::work work(context);
+    context.run();
 }
 
 extern "C"
