@@ -36,7 +36,7 @@ static void start_rpc_task() {
         utils::steady_timer(&context, std::move(cb), ms);
     });
     oled.begin();
-    rpc->subscribe<RpcCore::Bianry>("img", [](const RpcCore::Bianry& img) {
+    rpc->subscribe<RpcCore::Binary>("img", [](const RpcCore::Binary& img) {
         static Screen screen;
         screen.onClear();
         screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
