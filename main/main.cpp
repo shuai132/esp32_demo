@@ -13,6 +13,7 @@
 #include "ArduinoJson.hpp"
 #include "asio.hpp"
 #include "utils.h"
+#include "esp_pthread.h"
 
 const static char *TAG = "MAIN";
 
@@ -57,13 +58,13 @@ void app_main() {
         the_ip = std::string(ip);
     });
 
-    xTaskCreate([](void*){
-        start_rpc_task();
-        }, "rpc_task", 1024*40, nullptr, 5, nullptr);
+    esp_pthread_cfg_t cfg{1024*40, 5, false, "rpc_task", tskNO_AFFINITY};
+    esp_pthread_set_cfg(&cfg);
+    std::thread(start_rpc_task).detach();
 
-    return;
-
-    std::thread thread_weather([]{
+    esp_pthread_cfg_t cfg2{1024*40, 5, false, "weather_task", tskNO_AFFINITY};
+    esp_pthread_set_cfg(&cfg2);
+    std::thread([]{
         for(;;) {
             std::string http_result = http_get_weather();
             if (http_result.empty()) {
@@ -83,7 +84,7 @@ void app_main() {
 
             sleep(60);
         }
-    });
+    }).detach();
 
     auto screen = new Screen;
     screen->onBeforeDraw = [&] {
