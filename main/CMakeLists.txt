@@ -9,6 +9,7 @@ idf_component_register(SRCS "main.cpp"
         http_weather.cpp
         websocket.cpp
         utils.cpp
+        smartconfig.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules base)

@@ -4,6 +4,7 @@
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <nvs_flash.h>
 #include "chrome_game.h"
 #include "game/game_engine_port_esp32_idf.h"
 #include "wifi_station.h"
@@ -14,6 +15,7 @@
 #include "asio.hpp"
 #include "utils.h"
 #include "esp_pthread.h"
+#include "smartconfig.h"
 
 const static char *TAG = "MAIN";
 
@@ -54,9 +56,20 @@ void app_main() {
     static std::string weather;
     static std::string update_time;
 
-    wifi_init_sta([](const char* ip){
-        the_ip = std::string(ip);
+    //Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    start_smartconfig_task([](const WiFiInfo& info) {
+        ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
+    }, [](ConnectState state) {
+        ESP_LOGI(TAG, "ConnectState:%d", (int)state);
     });
+    return;
 
     esp_pthread_cfg_t cfg{1024*40, 5, false, "rpc_task", tskNO_AFFINITY};
     esp_pthread_set_cfg(&cfg);
