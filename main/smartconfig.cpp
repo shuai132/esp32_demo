@@ -13,8 +13,8 @@
 #include "esp_netif.h"
 #include "esp_smartconfig.h"
 
-static std::function<void(WiFiInfo)> update_cb;
-static std::function<void(ConnectState)> connect_cb;
+static WiFiInfoHandle update_cb;
+static ConnectStateHandle connect_cb;
 
 /* FreeRTOS event group to signal when we are connected & ready to make a request */
 static EventGroupHandle_t s_wifi_event_group;
@@ -38,6 +38,11 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         xEventGroupClearBits(s_wifi_event_group, CONNECTED_BIT);
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         xEventGroupSetBits(s_wifi_event_group, CONNECTED_BIT);
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGD(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        char ip[32];
+        sprintf(ip, IPSTR, IP2STR(&event->ip_info.ip));
+        connect_cb(ConnectState::Connected, ip);
     } else if (event_base == SC_EVENT && event_id == SC_EVENT_SCAN_DONE) {
         ESP_LOGI(TAG, "Scan done");
     } else if (event_base == SC_EVENT && event_id == SC_EVENT_FOUND_CHANNEL) {
@@ -75,36 +80,29 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         }
 
         ESP_ERROR_CHECK( esp_wifi_disconnect() );
-        connect_cb(ConnectState::Disconnected);
+        connect_cb(ConnectState::Disconnected, nullptr);
         ESP_ERROR_CHECK( esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
         esp_wifi_connect();
-        connect_cb(ConnectState::Connecting);
+        connect_cb(ConnectState::Connecting, nullptr);
     } else if (event_base == SC_EVENT && event_id == SC_EVENT_SEND_ACK_DONE) {
         xEventGroupSetBits(s_wifi_event_group, ESPTOUCH_DONE_BIT);
     }
 }
 
 static void smartconfig_task(void * parm) {
-    EventBits_t uxBits;
     ESP_ERROR_CHECK( esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS) );
     smartconfig_start_config_t cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
     ESP_ERROR_CHECK( esp_smartconfig_start(&cfg) );
     while (true) {
-        uxBits = xEventGroupWaitBits(s_wifi_event_group, CONNECTED_BIT | ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY);
-        if(uxBits & CONNECTED_BIT) {
-            ESP_LOGI(TAG, "WiFi Connected to ap");
-            connect_cb(ConnectState::Connected);
-        }
-        if(uxBits & ESPTOUCH_DONE_BIT) {
-            ESP_LOGI(TAG, "smartconfig over");
-            esp_smartconfig_stop();
-            vTaskDelete(nullptr);
-        }
+        xEventGroupWaitBits(s_wifi_event_group, ESPTOUCH_DONE_BIT, true, false, portMAX_DELAY);
+        ESP_LOGI(TAG, "smartconfig over");
+        esp_smartconfig_stop();
+        vTaskDelete(nullptr);
     }
 }
 
-void start_smartconfig_task(std::function<void(WiFiInfo)> updateCb,
-                            std::function<void(ConnectState)> connectCb) {
+void start_smartconfig_task(WiFiInfoHandle updateCb,
+                            ConnectStateHandle connectCb) {
     update_cb = std::move(updateCb);
     connect_cb = std::move(connectCb);
 

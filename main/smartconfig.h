@@ -14,5 +14,8 @@ enum class ConnectState {
     Connected,
 };
 
-void start_smartconfig_task(std::function<void(WiFiInfo)> updateCb,
-                            std::function<void(ConnectState)> connectCb);
+using WiFiInfoHandle = std::function<void(WiFiInfo)>;
+using ConnectStateHandle = std::function<void(ConnectState, void*)>;
+
+void start_smartconfig_task(WiFiInfoHandle updateCb,
+                            ConnectStateHandle connectCb);

@@ -21,6 +21,7 @@
 const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
 static Screen screen;
+static std::string local_ip_now;
 
 static void start_rpc_task() {
     static WebsocketClient client;
@@ -41,7 +42,6 @@ static void start_rpc_task() {
         utils::steady_timer(&context, std::move(cb), ms);
     });
     rpc->subscribe<RpcCore::Binary>("img", [](const RpcCore::Binary& img) {
-        static Screen screen;
         screen.onClear();
         screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
         screen.onDraw();
@@ -56,13 +56,12 @@ static void start_rpc_task() {
 }
 
 static void start_weather_task() {
-    static std::string the_ip;
     static std::string temperature;
     static std::string weather;
     static std::string update_time;
 
-    screen.onBeforeDraw = [&] {
-        screen.drawString(0, 8*0, the_ip.c_str());
+    screen.onBeforeDraw = [] {
+        screen.drawString(0, 8*0, local_ip_now.c_str());
         screen.drawString(0, 8*1, temperature.c_str());
         screen.drawString(0, 8*2, weather.c_str());
         screen.drawString(0, 8*3, update_time.c_str());
@@ -93,7 +92,8 @@ static void start_weather_task() {
     }).detach();
 }
 
-static void on_wifi_connected() {
+static void on_wifi_connected(const char* ip) {
+    local_ip_now = ip;
     start_rpc_task();
     start_weather_task();
 }
@@ -108,7 +108,7 @@ static void start_wifi_task() {
         nvs->get_string("ssid", ssid, sizeof(ssid));
         nvs->get_string("passwd", passwd, sizeof(passwd));
         wifi_station_init(ssid, passwd, [](const char* ip){
-            on_wifi_connected();
+            on_wifi_connected(ip);
         });
     }
     else {
@@ -119,10 +119,10 @@ static void start_wifi_task() {
             nvs->set_string("passwd", info.passwd.c_str());
             nvs->set_item("configed", true);
             nvs->commit();
-        }, [](ConnectState state) {
+        }, [](ConnectState state, void *data) {
             ESP_LOGI(TAG, "ConnectState:%d", (int)state);
             if (state == ConnectState::Connected) {
-                on_wifi_connected();
+                on_wifi_connected((char*)data);
             }
         });
     }
