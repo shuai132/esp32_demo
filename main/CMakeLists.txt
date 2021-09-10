@@ -1,7 +1,7 @@
 idf_component_register(SRCS "main.cpp"
         game/game_engine_port_esp32_idf.cpp
         oled/OLED.cpp
-        wifi_station.c
+        wifi_station.cpp
         oled/Adafruit_GFX.cpp
         oled/Adafruit_SSD1306.cpp
         oled/glcdfont.c
@@ -10,6 +10,7 @@ idf_component_register(SRCS "main.cpp"
         websocket.cpp
         utils.cpp
         smartconfig.cpp
+        nvs.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules base)

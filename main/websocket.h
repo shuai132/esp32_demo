@@ -22,7 +22,7 @@ public:
 
     void close();
 
-    void send(void *data, size_t len) const;
+    void send(const void *data, size_t len) const;
 
     std::function<void(std::string package)> onReceivedData;
     std::function<void(ConnectState)> onConnectState;

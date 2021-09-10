@@ -70,6 +70,6 @@ void WebsocketClient::close() {
     esp_websocket_client_close(client, portMAX_DELAY);
 }
 
-void WebsocketClient::send(void* data, size_t len) const {
+void WebsocketClient::send(const void* data, size_t len) const {
     esp_websocket_client_send_text(client, (const char*) data, (int) len, portMAX_DELAY);
 }

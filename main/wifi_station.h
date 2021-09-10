@@ -1,15 +1,8 @@
 #pragma once
 
-#include <stddef.h>
+#include <functional>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+using on_get_ip_t = std::function<void(const char* ip)>;
 
-typedef void (*on_get_ip_t)(const char*);
-
-void wifi_init_sta(on_get_ip_t handle);
-
-#ifdef __cplusplus
-}
-#endif
+void wifi_station_init(const char* ssid, const char* passwd, on_get_ip_t handle = nullptr, int retry_num_max = 20);
+bool wait_for_connect();

@@ -5,6 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <nvs_flash.h>
+#include <esp_pthread.h>
 #include "chrome_game.h"
 #include "game/game_engine_port_esp32_idf.h"
 #include "wifi_station.h"
@@ -14,18 +15,19 @@
 #include "ArduinoJson.hpp"
 #include "asio.hpp"
 #include "utils.h"
-#include "esp_pthread.h"
 #include "smartconfig.h"
+#include "nvs.h"
 
-const static char *TAG = "MAIN";
+const static char* TAG = "MAIN";
+const static char* NS_NAME_WIFI = "wifi";
+static Screen screen;
 
 static void start_rpc_task() {
-    using namespace RpcCore;
-
     static WebsocketClient client;
     static std::shared_ptr<RpcCore::Rpc> rpc;
     static asio::io_context context;
 
+    using namespace RpcCore;
     auto connection = std::make_shared<Connection>([&](std::string package) {
         client.send(package.data(), package.length());
     });
@@ -38,45 +40,36 @@ static void start_rpc_task() {
     rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
         utils::steady_timer(&context, std::move(cb), ms);
     });
-    oled.begin();
     rpc->subscribe<RpcCore::Binary>("img", [](const RpcCore::Binary& img) {
         static Screen screen;
         screen.onClear();
         screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
         screen.onDraw();
     });
-    asio::io_context::work work(context);
-    context.run();
+
+    esp_pthread_cfg_t cfg{1024*40, 5, false, "rpc_task", tskNO_AFFINITY};
+    esp_pthread_set_cfg(&cfg);
+    std::thread([]{
+        asio::io_context::work work(context);
+        context.run();
+    }).detach();
 }
 
-extern "C"
-void app_main() {
+static void start_weather_task() {
     static std::string the_ip;
     static std::string temperature;
     static std::string weather;
     static std::string update_time;
 
-    //Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+    screen.onBeforeDraw = [&] {
+        screen.drawString(0, 8*0, the_ip.c_str());
+        screen.drawString(0, 8*1, temperature.c_str());
+        screen.drawString(0, 8*2, weather.c_str());
+        screen.drawString(0, 8*3, update_time.c_str());
+    };
 
-    start_smartconfig_task([](const WiFiInfo& info) {
-        ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
-    }, [](ConnectState state) {
-        ESP_LOGI(TAG, "ConnectState:%d", (int)state);
-    });
-    return;
-
-    esp_pthread_cfg_t cfg{1024*40, 5, false, "rpc_task", tskNO_AFFINITY};
+    esp_pthread_cfg_t cfg{1024*40, 5, false, "weather_task", tskNO_AFFINITY};
     esp_pthread_set_cfg(&cfg);
-    std::thread(start_rpc_task).detach();
-
-    esp_pthread_cfg_t cfg2{1024*40, 5, false, "weather_task", tskNO_AFFINITY};
-    esp_pthread_set_cfg(&cfg2);
     std::thread([]{
         for(;;) {
             std::string http_result = http_get_weather();
@@ -98,21 +91,55 @@ void app_main() {
             sleep(60);
         }
     }).detach();
+}
 
-    auto screen = new Screen;
-    screen->onBeforeDraw = [&] {
-        screen->drawString(0, 8*0, the_ip.c_str());
-        screen->drawString(0, 8*1, temperature.c_str());
-        screen->drawString(0, 8*2, weather.c_str());
-        screen->drawString(0, 8*3, update_time.c_str());
-    };
+static void on_wifi_connected() {
+    start_rpc_task();
+    start_weather_task();
+}
 
+static void start_wifi_task() {
+    auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
+    bool configed = false;
+    nvs->get_item("configed", configed);
+    if (configed) {
+        char ssid[32];
+        char passwd[64];
+        nvs->get_string("ssid", ssid, sizeof(ssid));
+        nvs->get_string("passwd", passwd, sizeof(passwd));
+        wifi_station_init(ssid, passwd, [](const char* ip){
+            on_wifi_connected();
+        });
+    }
+    else {
+        start_smartconfig_task([](const WiFiInfo& info) {
+            ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
+            auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
+            nvs->set_string("ssid", info.ssid.c_str());
+            nvs->set_string("passwd", info.passwd.c_str());
+            nvs->set_item("configed", true);
+            nvs->commit();
+        }, [](ConnectState state) {
+            ESP_LOGI(TAG, "ConnectState:%d", (int)state);
+            if (state == ConnectState::Connected) {
+                on_wifi_connected();
+            }
+        });
+    }
+}
+
+extern "C"
+void app_main() {
     oled.begin();
+
+    nvs_init();
+    start_wifi_task();
+
     ScreenConfig c{};
     c.SCREEN_WIDTH = 128;
     c.SCREEN_HEIGHT = 64;
     c.PER_CHAR_WIDTH = 6;
     c.fps = 120;
-    c.canvas = screen;
+    c.canvas = &screen;
     start_game(&c);
 }
