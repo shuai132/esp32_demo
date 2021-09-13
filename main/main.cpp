@@ -17,11 +17,25 @@
 #include "utils.h"
 #include "smartconfig.h"
 #include "nvs.h"
+#include "udp_multicast.hpp"
 
 const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
 static Screen screen;
 static std::string local_ip_now;
+static bool rpc_screen_mode{false};
+
+static void start_game_task() {
+    std::thread([]{
+        ScreenConfig c{};
+        c.SCREEN_WIDTH = 128;
+        c.SCREEN_HEIGHT = 64;
+        c.PER_CHAR_WIDTH = 6;
+        c.fps = 120;
+        c.canvas = &screen;
+        start_game(&c);
+    }).detach();
+}
 
 static void start_rpc_task() {
     static WebsocketClient client;
@@ -35,7 +49,21 @@ static void start_rpc_task() {
     client.onReceivedData = [connection](std::string package) {
         connection->onRecvPackage(std::move(package));
     };
-    client.start("ws://192.168.0.109:3000");
+    client.onConnectState = [](WebsocketClient::ConnectState state) {
+        switch (state) {
+           case WebsocketClient::ConnectState::Connected:
+               rpc_screen_mode = true;
+               stop_game();
+               screen.onClear();
+               break;
+           case WebsocketClient::ConnectState::Disconnected:
+               break;
+           case WebsocketClient::ConnectState::Closed:
+               rpc_screen_mode = false;
+               start_game_task();
+               break;
+        }
+    };
 
     rpc = Rpc::create(connection);
     rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
@@ -51,6 +79,14 @@ static void start_rpc_task() {
     esp_pthread_set_cfg(&cfg);
     std::thread([]{
         asio::io_context::work work(context);
+        udp_multicast::receiver receiver(context, [](const std::string& name, const std::string& message) {
+            if (name != "opencv_oled") return;
+            static std::string uri;
+            if (uri == message) return;
+            uri = message;
+            client.close();
+            client.start(uri);
+        });
         context.run();
     }).detach();
 }
@@ -61,6 +97,7 @@ static void start_weather_task() {
     static std::string update_time;
 
     screen.onBeforeDraw = [] {
+        if (rpc_screen_mode) return;
         screen.drawString(0, 8*0, local_ip_now.c_str());
         screen.drawString(0, 8*1, temperature.c_str());
         screen.drawString(0, 8*2, weather.c_str());
@@ -131,15 +168,7 @@ static void start_wifi_task() {
 extern "C"
 void app_main() {
     oled.begin();
-
+    start_game_task();
     nvs_init();
     start_wifi_task();
-
-    ScreenConfig c{};
-    c.SCREEN_WIDTH = 128;
-    c.SCREEN_HEIGHT = 64;
-    c.PER_CHAR_WIDTH = 6;
-    c.fps = 120;
-    c.canvas = &screen;
-    start_game(&c);
 }

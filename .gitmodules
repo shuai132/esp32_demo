@@ -4,3 +4,6 @@
 [submodule "main/modules/RpcCore"]
 	path = main/modules/RpcCore
 	url = git@github.com:shuai132/RpcCore.git
+[submodule "main/modules/udp_multicast"]
+	path = main/modules/udp_multicast
+	url = git@github.com:shuai132/udp_multicast.git

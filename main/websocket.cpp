@@ -11,6 +11,9 @@ static void websocket_event_handler(void* handler_args, esp_event_base_t base, i
     switch (event_id) {
         case WEBSOCKET_EVENT_CONNECTED:
             ESP_LOGI(TAG, "WEBSOCKET_EVENT_CONNECTED");
+            if (client->onConnectState) {
+                client->onConnectState(WebsocketClient::ConnectState::Connected);
+            }
             break;
         case WEBSOCKET_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "WEBSOCKET_EVENT_DISCONNECTED");

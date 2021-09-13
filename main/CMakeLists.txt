@@ -15,6 +15,8 @@ idf_component_register(SRCS "main.cpp"
 
 include_directories(modules base)
 
+include_directories(modules/udp_multicast)
+
 set(MYAPP __idf_main)
 add_subdirectory(modules/chrome_game/engine)
 target_link_libraries(${MYAPP} PUBLIC game_engine)
