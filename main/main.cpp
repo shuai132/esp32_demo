@@ -23,7 +23,7 @@ const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
 static Screen screen;
 static std::string local_ip_now;
-static bool rpc_screen_mode{false};
+static std::atomic_bool rpc_screen_mode{false};
 
 static void start_game_task() {
     std::thread([]{
