@@ -10,7 +10,7 @@
 #include "game/game_engine_port_esp32_idf.h"
 #include "wifi_station.h"
 #include "http_weather.h"
-#include "websocket.h"
+#include "NetChannel.h"
 #include "RpcCore.hpp"
 #include "ArduinoJson.hpp"
 #include "asio.hpp"
@@ -38,31 +38,27 @@ static void start_game_task() {
 }
 
 static void start_rpc_task() {
-    static WebsocketClient client;
     static std::shared_ptr<RpcCore::Rpc> rpc;
     static asio::io_context context;
+    static NetChannel client(&context);
 
     using namespace RpcCore;
-    auto connection = std::make_shared<Connection>([&](std::string package) {
-        client.send(package.data(), package.length());
-    });
-    client.onReceivedData = [connection](std::string package) {
-        connection->onRecvPackage(std::move(package));
+    auto connection = std::make_shared<Connection>();
+    connection->sendPackageImpl = [](std::string package) {
+        client.sendData(package.data(), package.length());
     };
-    client.onConnectState = [](WebsocketClient::ConnectState state) {
-        switch (state) {
-           case WebsocketClient::ConnectState::Connected:
-               rpc_screen_mode = true;
-               stop_game();
-               screen.onClear();
-               break;
-           case WebsocketClient::ConnectState::Disconnected:
-               break;
-           case WebsocketClient::ConnectState::Closed:
-               rpc_screen_mode = false;
-               start_game_task();
-               break;
-        }
+    client.onData = [connection](void* data, size_t len) {
+        connection->onRecvPackage(std::string((char*)data, len));
+    };
+    client.onOpen = [] {
+        rpc_screen_mode = true;
+        stop_game();
+        screen.onClear();
+    };
+    client.onClose = []{
+        rpc_screen_mode = false;
+        screen.onClear();
+        start_game_task();
     };
 
     rpc = Rpc::create(connection);
@@ -82,10 +78,13 @@ static void start_rpc_task() {
         udp_multicast::receiver receiver(context, [](const std::string& name, const std::string& message) {
             if (name != "opencv_oled") return;
             static std::string uri;
-            if (uri == message) return;
+            if (client.isOpen() && uri == message) return;
             uri = message;
             client.close();
-            client.start(uri);
+            auto pos = uri.find(':');
+            auto ip = uri.substr(0, pos);
+            auto port = uri.substr(pos+1);
+            client.start(ip, port);
         });
         context.run();
     }).detach();

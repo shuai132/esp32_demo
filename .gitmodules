@@ -7,3 +7,6 @@
 [submodule "main/modules/udp_multicast"]
 	path = main/modules/udp_multicast
 	url = git@github.com:shuai132/udp_multicast.git
+[submodule "main/modules/PacketProcessor"]
+	path = main/modules/PacketProcessor
+	url = git@github.com:shuai132/PacketProcessor.git

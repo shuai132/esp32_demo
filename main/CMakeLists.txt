@@ -7,10 +7,11 @@ idf_component_register(SRCS "main.cpp"
         oled/glcdfont.c
         modules/chrome_game/game/chrome_game.cpp
         http_weather.cpp
-        websocket.cpp
         utils.cpp
         smartconfig.cpp
         nvs.cpp
+        TcpClient.cpp
+        NetChannel.cpp
         INCLUDE_DIRS ".")
 
 include_directories(modules base)
@@ -26,3 +27,6 @@ target_compile_options(${MYAPP} PRIVATE -Wno-missing-field-initializers)
 add_subdirectory(modules/RpcCore)
 target_link_libraries(${MYAPP} PUBLIC RpcCore)
 target_compile_definitions(${MYAPP} PRIVATE -DLOG_FOR_MCU)
+
+add_subdirectory(modules/PacketProcessor)
+target_link_libraries(${MYAPP} PUBLIC PacketProcessor)
