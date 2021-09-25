@@ -10,7 +10,9 @@ NetChannel::NetChannel(asio::io_context* context)
         if (onData) onData(data, size);
     });
     client_.onData = [this](uint8_t* data, size_t len) {
-        packetProcessor_.feed(data, len);
+        FOR(i, len) {
+            packetProcessor_.feed(data + i, 1);
+        }
     };
 }
 

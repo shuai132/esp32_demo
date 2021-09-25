@@ -6,6 +6,7 @@
 #include <freertos/task.h>
 #include <nvs_flash.h>
 #include <esp_pthread.h>
+#include "game_engine.hpp"
 #include "chrome_game.h"
 #include "game/game_engine_port_esp32_idf.h"
 #include "wifi_station.h"
@@ -23,7 +24,8 @@ const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
 static Screen screen;
 static std::string local_ip_now;
-static std::atomic_bool rpc_screen_mode{false};
+static std::atomic_bool rpc_working{false};
+static ge::Director* game;
 
 static void start_game_task() {
     std::thread([]{
@@ -31,9 +33,9 @@ static void start_game_task() {
         c.SCREEN_WIDTH = 128;
         c.SCREEN_HEIGHT = 64;
         c.PER_CHAR_WIDTH = 6;
-        c.fps = 120;
         c.canvas = &screen;
-        start_game(&c);
+        game = static_cast<ge::Director *>(chrome_game_init(&c));
+        game->start(120);
     }).detach();
 }
 
@@ -51,14 +53,14 @@ static void start_rpc_task() {
         connection->onRecvPackage(std::string((char*)data, len));
     };
     client.onOpen = [] {
-        rpc_screen_mode = true;
-        stop_game();
+        rpc_working = true;
+        game->pause();
         screen.onClear();
     };
     client.onClose = []{
-        rpc_screen_mode = false;
+        rpc_working = false;
         screen.onClear();
-        start_game_task();
+        game->resume();
     };
 
     rpc = Rpc::create(connection);
@@ -79,6 +81,7 @@ static void start_rpc_task() {
             if (name != "opencv_oled") return;
             static std::string uri;
             if (client.isOpen() && uri == message) return;
+            ESP_LOGI(TAG, "found server: %s", message.c_str());
             uri = message;
             client.close();
             auto pos = uri.find(':');
@@ -96,7 +99,7 @@ static void start_weather_task() {
     static std::string update_time;
 
     screen.onBeforeDraw = [] {
-        if (rpc_screen_mode) return;
+        if (rpc_working) return;
         screen.drawString(0, 8*0, local_ip_now.c_str());
         screen.drawString(0, 8*1, temperature.c_str());
         screen.drawString(0, 8*2, weather.c_str());
@@ -107,6 +110,10 @@ static void start_weather_task() {
     esp_pthread_set_cfg(&cfg);
     std::thread([]{
         for(;;) {
+            if (rpc_working) {
+                sleep(1);
+                continue;
+            }
             std::string http_result = http_get_weather();
             if (http_result.empty()) {
                 sleep(1);
