@@ -2,4 +2,4 @@
 
 #include <nvs_handle.hpp>
 
-void nvs_init();
+void esp_init();

@@ -9,7 +9,7 @@ idf_component_register(SRCS "main.cpp"
         http_weather.cpp
         utils.cpp
         smartconfig.cpp
-        nvs.cpp
+        esp_init.cpp
         TcpClient.cpp
         NetChannel.cpp
         INCLUDE_DIRS ".")

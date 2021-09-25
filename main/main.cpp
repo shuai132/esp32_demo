@@ -6,6 +6,7 @@
 #include <freertos/task.h>
 #include <nvs_flash.h>
 #include <esp_pthread.h>
+#include <driver/gpio.h>
 #include "game_engine.hpp"
 #include "chrome_game.h"
 #include "game/game_engine_port_esp32_idf.h"
@@ -17,15 +18,17 @@
 #include "asio.hpp"
 #include "utils.h"
 #include "smartconfig.h"
-#include "nvs.h"
+#include "esp_init.h"
 #include "udp_multicast.hpp"
 
 const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
 static Screen screen;
 static std::string local_ip_now;
-static std::atomic_bool rpc_working{false};
+static std::atomic_bool screen_show_rpc{false};
+static std::atomic_bool screen_show_weather{false};
 static ge::Director* game;
+static asio::io_context main_context;
 
 static void start_game_task() {
     std::thread([]{
@@ -41,8 +44,7 @@ static void start_game_task() {
 
 static void start_rpc_task() {
     static std::shared_ptr<RpcCore::Rpc> rpc;
-    static asio::io_context context;
-    static NetChannel client(&context);
+    static NetChannel client(&main_context);
 
     using namespace RpcCore;
     auto connection = std::make_shared<Connection>();
@@ -53,19 +55,19 @@ static void start_rpc_task() {
         connection->onRecvPackage(std::string((char*)data, len));
     };
     client.onOpen = [] {
-        rpc_working = true;
+        screen_show_rpc = true;
         game->pause();
         screen.onClear();
     };
     client.onClose = []{
-        rpc_working = false;
+        screen_show_rpc = false;
         screen.onClear();
         game->resume();
     };
 
     rpc = Rpc::create(connection);
     rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
-        utils::steady_timer(&context, std::move(cb), ms);
+        utils::steady_timer(&main_context, std::move(cb), ms);
     });
     rpc->subscribe<RpcCore::Binary>("img", [](const RpcCore::Binary& img) {
         screen.onClear();
@@ -73,24 +75,18 @@ static void start_rpc_task() {
         screen.onDraw();
     });
 
-    esp_pthread_cfg_t cfg{1024*40, 5, false, "rpc_task", tskNO_AFFINITY};
-    esp_pthread_set_cfg(&cfg);
-    std::thread([]{
-        asio::io_context::work work(context);
-        udp_multicast::receiver receiver(context, [](const std::string& name, const std::string& message) {
-            if (name != "opencv_oled") return;
-            static std::string uri;
-            if (client.isOpen() && uri == message) return;
-            ESP_LOGI(TAG, "found server: %s", message.c_str());
-            uri = message;
-            client.close();
-            auto pos = uri.find(':');
-            auto ip = uri.substr(0, pos);
-            auto port = uri.substr(pos+1);
-            client.start(ip, port);
-        });
-        context.run();
-    }).detach();
+    static udp_multicast::receiver receiver(main_context, [](const std::string& name, const std::string& message) {
+        if (name != "opencv_oled") return;
+        static std::string uri;
+        if (client.isOpen() && uri == message) return;
+        ESP_LOGI(TAG, "found server: %s", message.c_str());
+        uri = message;
+        client.close();
+        auto pos = uri.find(':');
+        auto ip = uri.substr(0, pos);
+        auto port = uri.substr(pos+1);
+        client.start(ip, port);
+    });
 }
 
 static void start_weather_task() {
@@ -99,7 +95,8 @@ static void start_weather_task() {
     static std::string update_time;
 
     screen.onBeforeDraw = [] {
-        if (rpc_working) return;
+        if (screen_show_rpc) return;
+        if (!screen_show_weather) return;
         screen.drawString(0, 8*0, local_ip_now.c_str());
         screen.drawString(0, 8*1, temperature.c_str());
         screen.drawString(0, 8*2, weather.c_str());
@@ -110,7 +107,7 @@ static void start_weather_task() {
     esp_pthread_set_cfg(&cfg);
     std::thread([]{
         for(;;) {
-            if (rpc_working) {
+            if (!screen_show_weather) {
                 sleep(1);
                 continue;
             }
@@ -129,6 +126,7 @@ static void start_weather_task() {
             temperature = "Temp:" + result_now["temperature"].as<std::string>();
             weather = result_now["text"].as<std::string>();
             update_time = result["last_update"].as<std::string>();
+            update_time = update_time.substr(0, update_time.find('+'));
 
             sleep(60);
         }
@@ -137,11 +135,57 @@ static void start_weather_task() {
 
 static void on_wifi_connected(const char* ip) {
     local_ip_now = ip;
-    start_rpc_task();
-    start_weather_task();
+    screen_show_weather = true;
 }
 
 static void start_wifi_task() {
+    static auto start_smartconfig = []{
+        start_smartconfig_task([](const WiFiInfo& info) {
+            ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
+            auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
+            nvs->set_string("ssid", info.ssid.c_str());
+            nvs->set_string("passwd", info.passwd.c_str());
+            nvs->set_item("configed", true);
+            nvs->commit();
+            }, [](ConnectState state, void *data) {
+            ESP_LOGI(TAG, "ConnectState:%d", (int)state);
+            if (state == ConnectState::Connected) {
+                on_wifi_connected((char*)data);
+                screen_show_weather = true;
+            }
+        });
+    };
+
+    static auto config_button_isr = []{
+        static xQueueHandle gpio_evt_queue = xQueueCreate(8, 1);
+        gpio_install_isr_service(0);
+        gpio_set_intr_type(GPIO_NUM_0, GPIO_INTR_ANYEDGE);
+        gpio_isr_handler_add(GPIO_NUM_0, [](void*) IRAM_ATTR {
+            uint8_t value = gpio_get_level(GPIO_NUM_0);
+            xQueueSendFromISR(gpio_evt_queue, &value, nullptr);
+            }, nullptr);
+
+        std::thread([]{
+            static unsigned long pushTime;
+            for(;;) {
+                uint8_t value;
+                if(!xQueueReceive(gpio_evt_queue, &value, portMAX_DELAY)) continue;
+                ESP_LOGI(TAG, "button: %d", value);
+                if(value == 0) {
+                    pushTime = ge::nowMs();
+                } else {
+                    if (ge::nowMs() - pushTime >= 3000) {
+                        ESP_LOGI(TAG, "start smartconfig");
+                        screen_show_weather = false;
+                        start_smartconfig();
+                    }
+                }
+            }
+        }).detach();
+    };
+
+    config_button_isr();
+
     auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
     bool configed = false;
     nvs->get_item("configed", configed);
@@ -152,29 +196,22 @@ static void start_wifi_task() {
         nvs->get_string("passwd", passwd, sizeof(passwd));
         wifi_station_init(ssid, passwd, [](const char* ip){
             on_wifi_connected(ip);
+        }, []{
+            start_smartconfig();
         });
     }
     else {
-        start_smartconfig_task([](const WiFiInfo& info) {
-            ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
-            auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
-            nvs->set_string("ssid", info.ssid.c_str());
-            nvs->set_string("passwd", info.passwd.c_str());
-            nvs->set_item("configed", true);
-            nvs->commit();
-        }, [](ConnectState state, void *data) {
-            ESP_LOGI(TAG, "ConnectState:%d", (int)state);
-            if (state == ConnectState::Connected) {
-                on_wifi_connected((char*)data);
-            }
-        });
+        start_smartconfig();
     }
 }
 
 extern "C"
 void app_main() {
-    oled.begin();
+    esp_init();
     start_game_task();
-    nvs_init();
     start_wifi_task();
+    start_rpc_task();
+    start_weather_task();
+    asio::io_context::work work(main_context);
+    main_context.run();
 }
