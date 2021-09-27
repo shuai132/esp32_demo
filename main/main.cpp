@@ -20,6 +20,7 @@
 #include "smartconfig.h"
 #include "esp_init.h"
 #include "udp_multicast.hpp"
+#include "udp_server.hpp"
 
 const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
@@ -69,11 +70,15 @@ static void start_rpc_task() {
     rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
         utils::steady_timer(&main_context, std::move(cb), ms);
     });
-    rpc->subscribe<RpcCore::Binary>("img", [](const RpcCore::Binary& img) {
+
+    static asio_udp::udp_server udp_server(main_context, 3001, 1024);
+    udp_server.onData = [](uint8_t* data, size_t size, const asio_udp::udp::endpoint& from) {
+        if (!screen_show_rpc) return;
+        if (size < 1024) return;
         screen.onClear();
-        screen.drawBitmap(0, 0, reinterpret_cast<const uint8_t*>(img.data()), 128, 64, 1);
+        screen.drawBitmap(0, 0, data, 128, 64, 1);
         screen.onDraw();
-    });
+    };
 
     static udp_multicast::receiver receiver(main_context, [](const std::string& name, const std::string& message) {
         if (name != "opencv_oled") return;
