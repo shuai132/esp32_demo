@@ -107,7 +107,7 @@ static void start_weather_task() {
     esp_pthread_set_cfg(&cfg);
     std::thread([]{
         for(;;) {
-            if (!screen_show_weather) {
+            if (!screen_show_weather | screen_show_rpc) {
                 sleep(1);
                 continue;
             }

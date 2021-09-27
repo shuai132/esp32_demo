@@ -22,13 +22,6 @@ static esp_event_handler_instance_t instance_any_id;
 static esp_event_handler_instance_t instance_got_ip;
 static EventGroupHandle_t s_wifi_event_group;
 
-static void release() {
-    /* The event will not be processed after unregister */
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
-    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id));
-    vEventGroupDelete(s_wifi_event_group);
-}
-
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
@@ -94,7 +87,7 @@ void wifi_station_init(const char* ssid, const char* passwd, on_get_ip_t on_get_
     ESP_ERROR_CHECK(esp_wifi_start() );
 }
 
-bool wait_for_connect()
+bool wifi_station_wait_for_connect()
 {
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
@@ -110,4 +103,11 @@ bool wait_for_connect()
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }
     return false;
+}
+
+void wifi_station_release() {
+    /* The event will not be processed after unregister */
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, instance_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, instance_any_id));
+    vEventGroupDelete(s_wifi_event_group);
 }
