@@ -10,3 +10,6 @@
 [submodule "main/modules/PacketProcessor"]
 	path = main/modules/PacketProcessor
 	url = git@github.com:shuai132/PacketProcessor.git
+[submodule "main/modules/asio_tcp"]
+	path = main/modules/asio_tcp
+	url = git@github.com:shuai132/asio_tcp.git

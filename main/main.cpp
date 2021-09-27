@@ -49,10 +49,10 @@ static void start_rpc_task() {
     using namespace RpcCore;
     auto connection = std::make_shared<Connection>();
     connection->sendPackageImpl = [](std::string package) {
-        client.sendData(package.data(), package.length());
+        client.sendData(std::move(package));
     };
-    client.onData = [connection](void* data, size_t len) {
-        connection->onRecvPackage(std::string((char*)data, len));
+    client.onData = [connection](std::string data) {
+        connection->onRecvPackage(std::move(data));
     };
     client.onOpen = [] {
         screen_show_rpc = true;

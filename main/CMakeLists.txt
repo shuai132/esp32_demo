@@ -10,7 +10,6 @@ idf_component_register(SRCS "main.cpp"
         utils.cpp
         smartconfig.cpp
         esp_init.cpp
-        TcpClient.cpp
         NetChannel.cpp
         INCLUDE_DIRS ".")
 
@@ -28,5 +27,4 @@ add_subdirectory(modules/RpcCore)
 target_link_libraries(${MYAPP} PUBLIC RpcCore)
 target_compile_definitions(${MYAPP} PRIVATE -DLOG_FOR_MCU)
 
-add_subdirectory(modules/PacketProcessor)
-target_link_libraries(${MYAPP} PUBLIC PacketProcessor)
+include_directories(modules/asio_tcp)
