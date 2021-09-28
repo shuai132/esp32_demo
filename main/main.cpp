@@ -48,6 +48,7 @@ static void start_rpc_task() {
     static NetChannel client(&main_context);
 
     using namespace RpcCore;
+    using RpcCore::String;
     auto connection = std::make_shared<Connection>();
     connection->sendPackageImpl = [](std::string package) {
         client.sendData(std::move(package));
@@ -69,6 +70,12 @@ static void start_rpc_task() {
     rpc = Rpc::create(connection);
     rpc->setTimer([&](uint32_t ms, Rpc::TimeoutCb cb) {
         utils::steady_timer(&main_context, std::move(cb), ms);
+    });
+    rpc->subscribe<String>("config_api", [](String key) {
+        http_weather_config_key(std::move(key));
+    });
+    rpc->subscribe<String>("config_location", [](String location) {
+        http_weather_config_location(std::move(location));
     });
 
     static asio_udp::udp_server udp_server(main_context, 3001, 1024);
@@ -99,6 +106,8 @@ static void start_weather_task() {
     static std::string weather;
     static std::string update_time;
 
+    http_weather_init();
+
     screen.onBeforeDraw = [] {
         if (screen_show_rpc) return;
         if (!screen_show_weather) return;
@@ -116,7 +125,7 @@ static void start_weather_task() {
                 sleep(1);
                 continue;
             }
-            std::string http_result = http_get_weather();
+            std::string http_result = http_weather_get();
             if (http_result.empty()) {
                 sleep(1);
                 continue;

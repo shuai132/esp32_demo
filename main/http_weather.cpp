@@ -5,11 +5,57 @@
 #include <esp_http_client.h>
 #include <esp_log.h>
 #include <unity.h>
+#include <nvs_handle.hpp>
+#include <utility>
 #include "defer.h"
 
 const static char *HTTP_TAG = "WEATHER";
+const static char *NS_NAME_WEATHER = "WEATHER";
 
-std::string http_get_weather() {
+#define API_KEY_DEFAULT         "S9r6pqlLjzI_cKVZM"
+#define API_LOCATION_DEFAULT    "31.315207:121.513113"
+
+static std::string api_key;
+static std::string api_location;
+
+void http_weather_init() {
+    auto nvs = nvs::open_nvs_handle(NS_NAME_WEATHER, NVS_READWRITE);
+    bool configed = false;
+    nvs->get_item("configed", configed);
+    if (!configed) {
+        api_key = API_KEY_DEFAULT;
+        api_location = API_LOCATION_DEFAULT;
+        nvs->set_string("key", api_key.c_str());
+        nvs->set_string("location", api_location.c_str());
+        nvs->set_item("configed", true);
+        nvs->commit();
+    } else {
+        char tmp[64];
+        nvs->get_string("key", tmp, sizeof(tmp));
+        api_key = tmp;
+        nvs->get_string("location", tmp, sizeof(tmp));
+        api_location = tmp;
+    }
+}
+
+void http_weather_config_key(std::string key) {
+    api_key = std::move(key);
+    auto nvs = nvs::open_nvs_handle(NS_NAME_WEATHER, NVS_READWRITE);
+    nvs->set_string("key", api_key.c_str());
+    nvs->commit();
+}
+
+void http_weather_config_location(std::string location) {
+    api_location = std::move(location);
+    auto nvs = nvs::open_nvs_handle(NS_NAME_WEATHER, NVS_READWRITE);
+    nvs->set_string("location", api_location.c_str());
+    nvs->commit();
+}
+
+std::string http_weather_get() {
+    std::string api_url = "http://api.seniverse.com/v3/weather/now.json?key=" + api_key
+        + "&location=" + api_location
+        + "&language=en&unit=c";
     esp_http_client_config_t config_with_url = {
             .url = "http://api.seniverse.com/v3/weather/now.json?key=S9r6pqlLjzI_cKVZM&location=31.315207:121.513113&language=en&unit=c"
     };
