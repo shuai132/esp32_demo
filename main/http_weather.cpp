@@ -1,6 +1,5 @@
 #include "http_weather.h"
 
-#include <cstdlib>
 #include <esp_system.h>
 #include <esp_http_client.h>
 #include <esp_log.h>
@@ -32,9 +31,9 @@ void http_weather_init() {
     } else {
         char tmp[64];
         nvs->get_string("key", tmp, sizeof(tmp));
-        api_key = tmp;
+        api_key.assign(tmp);
         nvs->get_string("location", tmp, sizeof(tmp));
-        api_location = tmp;
+        api_location.assign(tmp);
     }
 }
 
@@ -57,7 +56,7 @@ std::string http_weather_get() {
         + "&location=" + api_location
         + "&language=en&unit=c";
     esp_http_client_config_t config_with_url = {
-            .url = "http://api.seniverse.com/v3/weather/now.json?key=S9r6pqlLjzI_cKVZM&location=31.315207:121.513113&language=en&unit=c"
+            .url = api_url.c_str()
     };
     esp_http_client_handle_t client = esp_http_client_init(&config_with_url);
     TEST_ASSERT(client != nullptr);
@@ -78,13 +77,14 @@ std::string http_weather_get() {
         if (content_length < 0) {
             ESP_LOGE(HTTP_TAG, "HTTP client fetch headers failed");
         } else {
-            char output_buffer[content_length];
-            int data_read = esp_http_client_read_response(client, output_buffer, content_length);
+            std::string result;
+            result.resize(content_length);
+            int data_read = esp_http_client_read_response(client, result.data(), content_length);
             if (data_read >= 0) {
                 ESP_LOGI(HTTP_TAG, "HTTP GET Status = %d, content_length = %d",
                          esp_http_client_get_status_code(client),
                          esp_http_client_get_content_length(client));
-                return output_buffer;
+                return result;
             } else {
                 ESP_LOGE(HTTP_TAG, "Failed to read response");
             }

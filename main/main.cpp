@@ -154,6 +154,7 @@ static void on_wifi_connected(const char* ip) {
 
 static void start_wifi_task() {
     static auto start_smartconfig = []{
+        screen_show_weather = false;
         start_smartconfig_task([](const WiFiInfo& info) {
             ESP_LOGI(TAG, "WiFiInfo:%s %s", info.ssid.c_str(), info.passwd.c_str());
             auto nvs = nvs::open_nvs_handle(NS_NAME_WIFI, NVS_READWRITE);
@@ -165,7 +166,6 @@ static void start_wifi_task() {
             ESP_LOGI(TAG, "ConnectState:%d", (int)state);
             if (state == ConnectState::Connected) {
                 on_wifi_connected((char*)data);
-                screen_show_weather = true;
             }
         });
     };
@@ -190,7 +190,6 @@ static void start_wifi_task() {
                 } else {
                     if (ge::nowMs() - pushTime >= 3000) {
                         ESP_LOGI(TAG, "start smartconfig");
-                        screen_show_weather = false;
                         start_smartconfig();
                     }
                 }
