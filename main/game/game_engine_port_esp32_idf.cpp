@@ -24,14 +24,10 @@ bool checkButton() {
 
 }
 
-static void initButton() {
+void initButton() {
     gpio_config_t io_conf = {
             .pin_bit_mask = 1ULL << GPIO_BUTTON,
             .mode = GPIO_MODE_INPUT,
     };
     gpio_config(&io_conf);
-}
-
-Screen::Screen() {
-    initButton();
 }

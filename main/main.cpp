@@ -24,7 +24,18 @@
 
 const static char* TAG = "MAIN";
 const static char* NS_NAME_WIFI = "wifi";
+#ifdef CONFIG_IDF_TARGET_ESP32
 static Screen screen;
+#else
+struct ScreenFake : public ge::Canvas {
+    void onClear() override {}
+    void onDraw() override{ sleep(1); }
+    void drawBitmap(uint16_t x, uint16_t y, const uint8_t *bitmap, uint16_t w, uint16_t h, uint16_t color) override {}
+    size_t drawBuffer(uint16_t x, uint16_t y, const char *buffer, size_t len) override{ return 0; }
+    std::function<void()> onBeforeDraw;
+};
+static ScreenFake screen;
+#endif
 static std::string local_ip_now;
 static std::atomic_bool screen_show_rpc{false};
 static std::atomic_bool screen_show_weather{false};
@@ -221,6 +232,8 @@ static void start_wifi_task() {
 extern "C"
 void app_main() {
     esp_init();
+//    initButton();
+//    oled.begin();
     start_game_task();
     start_wifi_task();
     start_rpc_task();

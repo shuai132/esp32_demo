@@ -1,7 +1,6 @@
 #include "esp_init.h"
 #include <nvs_flash.h>
 #include <esp_event.h>
-#include "oled/OLED.h"
 #include "wifi_station.h"
 
 void esp_init()
@@ -14,8 +13,6 @@ void esp_init()
     ESP_ERROR_CHECK(ret);
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-    oled.begin();
 
     wifi_init();
 }

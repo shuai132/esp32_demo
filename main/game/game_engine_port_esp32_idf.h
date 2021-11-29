@@ -6,8 +6,6 @@
 struct Screen : public ge::Canvas {
     std::function<void()> onBeforeDraw;
 
-    Screen();
-
     void onClear() override {
         oled.clearDisplay();
     }
@@ -27,3 +25,5 @@ struct Screen : public ge::Canvas {
         return oled.write((const uint8_t*) buffer, len);
     }
 };
+
+void initButton();
